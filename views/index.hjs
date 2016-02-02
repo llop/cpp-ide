@@ -5,8 +5,8 @@
     <title>GDB IDE</title>
     
     <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Ubuntu' type='text/css'>
-    <link rel="stylesheet" href="/javascripts/easyui/themes/default/easyui.css" type="text/css" >
-    <link rel="stylesheet" href="/javascripts/easyui/themes/icon.css" type="text/css" >
+    <link rel="stylesheet" href="/jeasyui/themes/default/easyui.css" type="text/css" >
+    <link rel="stylesheet" href="/jeasyui/themes/icon.css" type="text/css" >
     <link rel='stylesheet' href='/stylesheets/style.css' />
     
     <style type="text/css" media="screen">
@@ -24,14 +24,14 @@
     </style>
     
     <!-- GUI -->
-    <script type="text/javascript" src="/javascripts/easyui/jquery.min.js"></script>
-    <script type="text/javascript" src="/javascripts/easyui/jquery.easyui.min.js"></script>
+    <script type="text/javascript" src="/jquery/dist/jquery.min.js"></script>
+    <script type="text/javascript" src="/jeasyui/jquery.easyui.min.js"></script>
     <!-- code editor -->
-    <script type="text/javascript" src="/javascripts/ace/ace.js" charset="utf-8"></script>
+    <script type="text/javascript" src="/ace-builds/src-min/ace.js" charset="utf-8"></script>
     <!-- terminal -->
-    <script type="text/javascript" src="/javascripts/term.js"></script>
+    <script type="text/javascript" src="/term.js/src/term.js"></script>
     <!-- socket.io -->
-    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <script type="text/javascript" src="/socket.io-client/socket.io.js"></script>
 		<script>
 	  
 		//-----------------------------------------
@@ -217,7 +217,7 @@
         <div style="padding:20px 15px 20px 15px;float:left;display:inline-block">
           <!-- <button class="easyui-linkbutton" onclick="runHandler()">Run</button> -->
           <button id="debug-btn" onclick="debugHandler()">Debug</button>
-          <button id="step-in-btn" onclick="stepIntoHandler()" disabled="disabled">Step into</button>
+          <button id="step-in-btn" onclick="stepIntoHandler()" >Step into</button>
           <button id="step-over-btn" onclick="stepOverHandler()" disabled="disabled">Step over</button>
           <button id="stop-btn" onclick="stopHandler()" disabled="disabled">Stop</button>
         </div>

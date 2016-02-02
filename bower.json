@@ -1,0 +1,25 @@
+{
+  "name": "gdb-term",
+  "description": "",
+  "main": "",
+  "authors": [
+    "llop <albertlobo1981@yahoo.es>"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/llop/cpp-ide",
+  "moduleType": [],
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "ace-builds": "^1.2.3",
+    "jeasyui": "^1.4.3",
+    "socket.io-client": "^1.4.5",
+    "term.js": "^0.0.7"
+  }
+}

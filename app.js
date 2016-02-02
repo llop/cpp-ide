@@ -25,7 +25,10 @@ app.use(logger('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
+
+// public folders
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'bower_components')));
 
 
 //----------------------------------------------
@@ -36,58 +39,81 @@ var socket;
 var buff = [];
 
 var nodegdb = require("./node-gdb/node-gdb.js");
+
 var gdb = new nodegdb();
-app.gdb = gdb;
+gdb.ready(function() {
+  app.gdb = gdb;
 
-// Listen to all events
-gdb.on('gdbConsoleOutput', function(data) {
-  console.log("gdbConsoleOutput: " + JSON.stringify(data));
-});
-gdb.on('gdbInternalsOutput', function(data) {
-  console.log("gdbInternalsOutput: " + JSON.stringify(data));
-});
-gdb.on('gdbStateChange', function(data) {
-  console.log("gdbStateChange: " + JSON.stringify(data));
-});
-gdb.on('gdbInfo', function(data) {
-  console.log("gdbInfo: " + JSON.stringify(data));
-});
-gdb.on('gdbCommandResponse', function(data) {
-  console.log("gdbCommandResponse: " + JSON.stringify(data));
-});
-gdb.on('gdbProgress', function(data) {
-  console.log("gdbProgress: " + JSON.stringify(data));
-});
-gdb.on('appOut', function(data) {
-  console.log("appOut: " + data);
-});
-gdb.on('appErr', function(data) {
-  console.log("appErr: " + data);
-});
-gdb.on('gdbOut', function(data) {
-  console.log("gdbOut: " + data);
-});
-gdb.on('gdbErr', function(data) {
-  console.log("gdbErr: " + data);
-});
-
-
-gdb.on('appOut', function(data) {
-  return !socket ? buff.push(data) : socket.emit('data', data);
-});
-gdb.on('appErr', function(data) {
-  return !socket ? buff.push(data) : socket.emit('data', data);
-});
+  // Listen to all events
+  gdb.on('gdbConsoleOut', function(data) {
+    console.log("gdbConsoleOut: " + JSON.stringify(data));
+  });
+  gdb.on('gdbInternalsOut', function(data) {
+    console.log("gdbInternalsOut: " + JSON.stringify(data));
+  });
+  gdb.on('gdbTargetOut', function(data) {
+    console.log("gdbTargetOut: " + JSON.stringify(data));
+  });
+  gdb.on('gdbStateChange', function(data) {
+    console.log("gdbStateChange: " + JSON.stringify(data));
+  });
+  gdb.on('gdbInfo', function(data) {
+    console.log("gdbInfo: " + JSON.stringify(data));
+  });
+  gdb.on('gdbCommandResponse', function(data) {
+    console.log("gdbCommandResponse: " + JSON.stringify(data));
+  });
+  gdb.on('gdbProgress', function(data) {
+    console.log("gdbProgress: " + JSON.stringify(data));
+  });
+  gdb.on('appOut', function(data) {
+    console.log("appOut: " + data);
+  });
+  gdb.on('appErr', function(data) {
+    console.log("appErr: " + data);
+  });
+  gdb.on('gdbOut', function(data) {
+    console.log("gdbOut: " + data);
+  });
+  gdb.on('gdbErr', function(data) {
+    console.log("gdbErr: " + data);
+  });
 
 
-// entxufar joc de proves des d'un fitxer
-//var fs = require('fs');
-//var jocDeProves = fs.createReadStream('/home/llop/Llop/FIB/TFG/in.txt');
-//jocDeProves.pipe(gdb.appIn);
+  gdb.on('appOut', function(data) {
+    return !socket ? buff.push(data) : socket.emit('data', data);
+  });
+  gdb.on('appErr', function(data) {
+    return !socket ? buff.push(data) : socket.emit('data', data);
+  });
 
-// hardcodejar input
-// gdb.appIn.write("23 45\n");
+  // entxufar joc de proves des d'un fitxer
+  var fs = require('fs');
+  var jocDeProves = fs.createReadStream('/home/llop/Llop/FIB/TFG/in.txt');
 
+  gdb.load("/home/llop/Llop/FIB/TFG/a.out", [], function(data) {
+    gdb.run(function(data) {
+      gdb.pipeToAppIn(jocDeProves);
+      console.log("RUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUUN");
+      setTimeout(function() {
+        gdb.stop(function(data) {
+          console.log("DUUUUUUUUUUUUMMMMMM: "+JSON.stringify(data));
+          setTimeout(function() {
+            gdb.run(function(data) {
+              gdb.appInWrite("1 2 3\n");
+              setTimeout(function() {
+                gdb.stop(function(data) {
+                  console.log("DOMMMMMM: "+JSON.stringify(data));
+                });
+              }, 500);
+            });
+          }, 2000);
+        });
+      }, 500);
+    });
+  });
+
+});
 
 //----------------------------------------------
 // socket.io setup
