@@ -2,7 +2,7 @@
 <html>
   <head>
     <!-- title, meta, stylesheets, favicon, scripts, ... -->
-    <title>GDB IDE</title>
+    <title><%title%></title>
     
     <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Ubuntu' type='text/css'>
     <link rel="stylesheet" href="/jeasyui/themes/default/easyui.css" type="text/css" >
@@ -178,7 +178,7 @@
     <!-- NORTH REGION: Header -->
     <div data-options="region:'north',split:false,collapsible:false" style="height:75px;">
     
-      <div align="center" style="padding:10px"><h1>GDB Terminal</h1></div>
+      <div align="center" style="padding:10px"><h1><%title%></h1></div>
       
     </div>
     

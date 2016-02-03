@@ -19,6 +19,11 @@ var app = express();
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'hjs');
 
+// if we are gonna be using Angular, the double curly braces are gonna be a problem
+// from now on, in html templates: <% var %> must be used instead of {{ title }} to write text
+//                                 to write raw html, use <%{ title }%> instead of {{{ title }}}
+app.locals.delimiters = '<% %>';
+
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(logger('dev'));
@@ -40,7 +45,8 @@ var buff = [];
 
 var nodegdb = require("./node-gdb/node-gdb.js");
 
-var gdb = new nodegdb();
+var gdbArgs = ["-data-directory", "/home/llop/Llop/gdb-7.10.1/gdb/data-directory"];
+var gdb = new nodegdb(gdbArgs);
 gdb.ready(function() {
   app.gdb = gdb;
 
@@ -90,7 +96,18 @@ gdb.ready(function() {
   // entxufar joc de proves des d'un fitxer
   var fs = require('fs');
   var jocDeProves = fs.createReadStream('/home/llop/Llop/FIB/TFG/in.txt');
-
+  
+  gdb.load("/home/llop/Llop/FIB/TFG/a.out", [], function(data) {
+    gdb.run([], function(data) {
+      gdb.pipeToAppIn(jocDeProves);
+    });
+  
+    gdb.evalExpression("v", function(data) {
+      console.log("EXPR = "+JSON.stringify(data));
+    });
+  });
+  
+  /*
   gdb.load("/home/llop/Llop/FIB/TFG/a.out", [], function(data) {
     gdb.run(function(data) {
       gdb.pipeToAppIn(jocDeProves);
@@ -112,7 +129,7 @@ gdb.ready(function() {
       }, 500);
     });
   });
-
+  */
 });
 
 //----------------------------------------------

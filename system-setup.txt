@@ -1,0 +1,45 @@
+
+
+
+
+Pretty print
+------------
+
+* to install python 2.7, apt-get these packages:
+
+  sudo apt-get install build-essential checkinstall
+  sudo apt-get install libreadline-gplv2-dev libncursesw5-dev libssl-dev libsqlite3-dev tk-dev libgdbm-dev libc6-dev libbz2-dev
+
+* download python 2.7 from website
+
+  https://www.python.org/downloads/release/python-2711/
+
+* extract to folder /usr/lib/Python-2.7.11, and cd to it
+
+* install using the following commands:
+
+  sudo ./configure --enable-unicode=ucs4 --enable-shared
+  sudo make install
+  sudo checkinstall
+
+
+* to install gdb with python, download gdb from website
+
+  http://ftp.gnu.org/gnu/gdb/gdb-7.10.1.tar.gz
+
+* extract and cd into gdb-7-10.1 folder
+
+* install using the following commands:
+  ./configure --with-python
+  make
+  sudo cp gdb/gdb /usr/local/bin/gdb
+
+
+
+
+
+
+
+
+
+

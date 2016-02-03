@@ -3,21 +3,18 @@
 //-----------------------------------------------------------
 
 var spawn = require('child_process').spawn;
-var exec = require('child_process').exec;
 var events = require('events');
 var fs = require('fs');
 var mknod = require('mknod');
 var os = require('os');
 var path = require('path');
+var gdbParser = require('./gdb-out-parser.js');
 
 
-//-----------------------------------------------------------
-// String helper functions
-//-----------------------------------------------------------
 
-function stringStartsWith(str, prefix) {
-  return str.slice(0, prefix.length)==prefix;
-}
+//function stringStartsWith(str, prefix) {
+//  return str.slice(0, prefix.length)==prefix;
+//}
 function isEmpty(str) {
   return !str || 0===str.length;
 }
@@ -25,107 +22,11 @@ function trim(str) {
   if (str) str = str.trim();
   return str;
 }
-function writeBlanks(str, i, j) {
-  var blanks = "";
-  while (i <= j) {
-    blanks.concat(' ');
-    ++i;
-  }
-  return str.substr(0, i).concat(blanks).concat(str.substr(j+1));
-}
+
 
 function back(arr) {
   if (arr && arr.length>0) return arr[arr.length-1];
   return undefined;
-}
-
-//-----------------------------------------------------------
-// gdb output helper functions
-//-----------------------------------------------------------
-
-/*
- * About GDB MI output
- * https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Output-Syntax.html
- * Notes:
- *   * All output sequences end in a single line containing a period.
- *   * The token is from the corresponding request. Note that for all async output, while the token is allowed by 
- *     the grammar and may be output by future versions of gdb for select async output messages, it is generally omitted. 
- *     Frontends should treat all async output as reporting general changes in the state of the target 
- *     and there should be no need to associate async output to any prior command.
- *   * status-async-output contains on-going status information about the progress of a slow operation. It can be discarded. 
- *     All status output is prefixed by ‘+’.
- *   * exec-async-output contains asynchronous state change on the target (stopped, started, disappeared). 
- *     All async output is prefixed by ‘*’.
- *   * notify-async-output contains supplementary information that the client should handle (e.g., a new breakpoint information). 
- *     All notify output is prefixed by ‘=’.
- *   * console-stream-output is output that should be displayed as is in the console. It is the textual response to a CLI command. 
- *     All the console output is prefixed by ‘~’.
- *   * target-stream-output is the output produced by the target program. All the target output is prefixed by ‘@’.
- *   * log-stream-output is output text coming from gdb's internals, for instance messages that should be displayed 
- *     as part of an error log. All the log output is prefixed by ‘&’.
- *   * New gdb/mi commands should only output lists containing values.
- */
-function resultToJSON(str) {
-  if (isEmpty(str)) return {};
-  // put quotes around variables, and turn '=' into ':'
-  str = str.replace(/=/g, '!:');
-	str = str.replace(/([a-zA-Z0-9-]*)!:/g, '\"$1\":');
-  // GDB puts labels in arrays: strip them
-  var stack = [ -1 ];
-  for (var i = 0; i < str.length; ++i) {
-    var ch = str[i];
-    // stack tells us where we are (inside array or object)
-    if (ch == '{') stack.push(0);
-    else if (ch == '[') stack.push(1);
-    else if (ch == '}' || ch == ']') stack.pop();
-    // delete label inside array
-    if (stack[stack.length-1]==1 && (str[i]==','||str[i]=='[') && str[i+1]=='\"') {
-      var j = i + 1;
-      while (j<str.length && str[j]!=':' && str[j]!='=' && str[j]!=']') ++j;
-      if (j<str.length && (str[j]==':'||str[j]=='=')) str = writeBlanks(str, i, j);
-    }
-  }
-  // return as JSON
-  try {
-    return JSON.parse('{'.concat(str).concat('}'));
-  } catch (err) {
-    console.log('Error parsing result: ' + err);
-  }
-  return {};
-}
-
-
-var streamRecordClass = {
-  '~': 'console-stream-output',
-  '&': 'log-stream-output',
-  '@': 'target-stream-output'
-};
-function parseStreamRecordResult(line) {
-  // result class
-  var prefix = line[0];
-  var klass = streamRecordClass[prefix];
-  // and result data (in this case, a plain string)
-  // console and internals output are plain strings
-  line = trim(line.substr(1));
-  if (line[0]=='"' && line[line.length-1]=='"') line = trim(line.substr(1, line.length-2));
-  line = line.replace(/\\"/g, '\"').replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-  var result = '\"'.concat(line).concat('\"');
-  return { class: klass, result: result };
-}
-function parseExecRecordResult(line) {
-  // output class and result
-  var i = 1;
-  while (i<line.length && line[i]!=',') ++i;
-  var klass = trim(line.substring(1, i));
-  var result = resultToJSON(trim(line.substr(i+1)));
-  return { class: klass, result: result };
-}
-
-function isStreamRecord(prefix) {
-  return prefix=='~' || prefix=='&' || prefix=='@';
-}
-function isNotifyOutput(prefix) {
-  return prefix=='=' || prefix=='+';
 }
 
 
@@ -161,6 +62,12 @@ function randTempFilePath() {
 }
 
 
+function back(arr) {
+  if (arr && arr.length>0) return arr[arr.length-1];
+  return undefined;
+}
+
+
 //-----------------------------------------------------------
 // Main gdb instance
 // 
@@ -170,8 +77,31 @@ function randTempFilePath() {
 
 function nodeGdb(gdbArgs) {
   
-  // reference to this instance for callbacks
-  var me = this;
+  //----------------------------------------------------------------------------------
+  //
+  // private variables
+  // 
+  //----------------------------------------------------------------------------------
+  
+  var me = this;                            // reference to this instance for callbacks
+  
+  var interactive = false;                  // when true, more commands can be issued to gdb
+  var gdbInteractiveCallback = undefined;   // function that will be called after GDB has 
+                                            // executed a command and gone back to interactive mode  
+  
+  var debugStatus = 'idle';                 // 'active' or 'idle': do not allow for more than 1 debug at a time
+  
+  var execStatus = 'stopped';               // https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records
+                                            // execution status can be 'running' or 'stopped' (breakpoint, SIGINT, ...)
+  
+  var commadQueue = [];                     // commands to be executed
+  
+  var streamRecords = new BArray(100);      // save last hundred records here
+  var execOutRecords = new BArray(100);
+  var notifyOutRecords = new BArray(100);
+  
+  var processes = [];                       // debugee's PID and thread group id
+  
   
   //----------------------------------------------------------------------------------
   //
@@ -295,13 +225,13 @@ function nodeGdb(gdbArgs) {
     }
     
     // parse result
-    var prefix = line[0],
-        result = isStreamRecord(prefix) ? parseStreamRecordResult(line) : parseExecRecordResult(line);
+    var result = gdbParser.parseRecord(line);
     
     // process command results
-    if (isStreamRecord(prefix)) processStreamRecord(prefix, result);
+    var prefix = line[0];
+    if (gdbParser.isStreamRecord(prefix)) processStreamRecord(prefix, result);
     else {
-      if (isNotifyOutput(prefix)) processNotifyOutput(prefix, result);
+      if (gdbParser.isNotifyOutput(prefix)) processNotifyOutput(prefix, result);
       else processAsyncOutput(prefix, result);
     }
     
@@ -366,12 +296,14 @@ function nodeGdb(gdbArgs) {
     // -exec-arguments -> Set the inferior program arguments, to be used in the next `-exec-run'.
     // If any args had been set before, they get wiped.
     enqueueCommand("-file-exec-and-symbols", [programName], function(data) {
-      enqueueCommand("-exec-arguments", programArgs, callback);
+      enqueueCommand("-break-insert", ["main.cc:28"], function(data) {
+        enqueueCommand("-exec-arguments", programArgs, callback);
+      });
     });
   };
   
   // start the debug
-  nodeGdb.prototype.run = function(callback) {
+  nodeGdb.prototype.run = function(args, callback) {
     // debug one program at a time!
     if (debugStatus=='active') {
       callback({ error: 'Already debugging a program' });
@@ -401,10 +333,10 @@ function nodeGdb(gdbArgs) {
     
     // -exec-run -> Asynchronous command. Starts execution of the inferior from the beginning. 
     // The inferior executes until either a breakpoint is encountered or the program exits.
-    enqueueCommand("-exec-run", [], callback);
+    enqueueCommand("-exec-run", args, callback);
   };
   
-  nodeGdb.prototype.continue = function(callback) {
+  nodeGdb.prototype.continue = function(args, callback) {
     // make sure we have started debugging something and we are on pause (status 'stopped')
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -417,7 +349,7 @@ function nodeGdb(gdbArgs) {
     
     // exec-continue -> Asynchronous command. Resumes the execution of the inferior program 
     // until a breakpoint is encountered, or until the inferior exits.
-    enqueueCommand("-exec-continue", [], callback);
+    enqueueCommand("-exec-continue", args, callback);
   };
   
   nodeGdb.prototype.pause = function(callback) {
@@ -468,7 +400,7 @@ function nodeGdb(gdbArgs) {
   //-------------------------------------------------------------------------
   // Step methods
   //-------------------------------------------------------------------------
-  nodeGdb.prototype.stepOver = function(callback) {
+  nodeGdb.prototype.stepOver = function(args, callback) {
     // error check
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -480,10 +412,10 @@ function nodeGdb(gdbArgs) {
     }
     // -exec-next -> Asynchronous command. Resumes execution of the inferior program, 
     // stopping when the beginning of the next source line is reached.
-    enqueueCommand("-exec-next", [], callback);
+    enqueueCommand("-exec-next", args, callback);
   };
   
-  nodeGdb.prototype.stepInto = function(callback) {
+  nodeGdb.prototype.stepInto = function(args, callback) {
     // error check
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -497,10 +429,10 @@ function nodeGdb(gdbArgs) {
     // stopping when the beginning of the next source line is reached, 
     // if the next source line is not a function call. 
     // If it is, stop at the first instruction of the called function
-    enqueueCommand("-exec-step", [], callback);
+    enqueueCommand("-exec-step", args, callback);
   };
   
-  nodeGdb.prototype.stepOut = function(callback) {
+  nodeGdb.prototype.stepOut = function(args, callback) {
     // error check
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -513,7 +445,7 @@ function nodeGdb(gdbArgs) {
     // -exec-finish -> Asynchronous command. Resumes the execution of the inferior program 
     // until the current function is exited. 
     // Displays the results returned by the function
-    enqueueCommand("-exec-finish", [], callback);
+    enqueueCommand("-exec-finish", args, callback);
   };
   
   
@@ -523,21 +455,7 @@ function nodeGdb(gdbArgs) {
   // 
   //-------------------------------------------------------------------------
   
-  nodeGdb.prototype.listVariables = function(callback) {
-    // error check
-    if (debugStatus=='idle') {
-      callback({ error: 'Not debugging a program' });
-      return;
-    }
-    if (execStatus=='running') {
-      callback({ error: 'Program is running, cannot list variables' });
-      return;
-    }
-    
-    enqueueCommand("-stack-list-variables", ["1"], callback);
-  };
-  
-  nodeGdb.prototype.evalExpression = function(callback) {
+  nodeGdb.prototype.evalExpression = function(expr, callback) {
     // error check
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -548,10 +466,13 @@ function nodeGdb(gdbArgs) {
       return;
     }
     
-    enqueueCommand("-stack-list-variables", ["1"], callback);
+    // -data-evaluate-expression -> Evaluate expr as an expression. The expression 
+    // could contain an inferior function call. The function call will execute synchronously. 
+    // If the expression contains spaces, it must be enclosed in double quotes.
+    enqueueCommand("-data-evaluate-expression", [expr], callback);
   };
   
-  nodeGdb.prototype.setVariableValue = function(callback) {
+  nodeGdb.prototype.setVariableValue = function(varName, varValue, callback) {
     // error check
     if (debugStatus=='idle') {
       callback({ error: 'Not debugging a program' });
@@ -562,7 +483,9 @@ function nodeGdb(gdbArgs) {
       return;
     }
     
-    enqueueCommand("-stack-list-variables", ["1"], callback);
+    // https://sourceware.org/gdb/current/onlinedocs/gdb/Assignment.html
+    // To alter the value of a variable, evaluate an assignment expression
+    enqueueCommand("-data-evaluate-expression", [varName+"="+varValue], callback);
   };
   
   
@@ -572,12 +495,136 @@ function nodeGdb(gdbArgs) {
   // 
   //-------------------------------------------------------------------------
   
-  nodeGdb.prototype.setBreakpoint = function(callback) {
-    enqueueCommand("-stack-list-variables", ["1"], callback);
+  nodeGdb.prototype.insertBreakpoint = function(args, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot insert breakpoint' });
+      return;
+    }
+    // -break-insert -> inserts a breakpoint
+    enqueueCommand("-break-insert", args, callback);
+  };
+  nodeGdb.prototype.enableBreakpoints = function(breakpoints, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot enable breakpoints' });
+      return;
+    }
+    // -break-enable -> Enable (previously disabled) breakpoint(s)
+    enqueueCommand("-break-enable", breakpoints, callback);
   };
   
-  nodeGdb.prototype.removeBreakpoint = function(callback) {
-    enqueueCommand("-stack-list-variables", ["1"], callback);
+  nodeGdb.prototype.deleteBreakpoints = function(breakpoints, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot delete breakpoints' });
+      return;
+    }
+    // -break-delete -> Delete the breakpoint(s) whose number(s) are specified in the argument list. 
+    // This is obviously reflected in the breakpoint list.
+    enqueueCommand("-break-delete", breakpoints, callback);
+  };
+  nodeGdb.prototype.disableBreakpoints = function(breakpoints, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot disable breakpoints' });
+      return;
+    }
+    // -break-disable -> Disable the named breakpoint(s). 
+    // The field `enabled' in the break list is now set to `n' for the named breakpoint(s).
+    enqueueCommand("-break-disable", breakpoints, callback);
+  };
+  nodeGdb.prototype.listBreakpoints = function(breakpoints, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot disable breakpoints' });
+      return;
+    }
+    // -break-list -> Displays the list of inserted breakpoints
+    enqueueCommand("-break-list", breakpoints, callback);
+  };
+  
+  
+  
+  // set args = ["2"] to get more data
+  // use the --frame option to select frame --frame 0
+  nodeGdb.prototype.listVariables = function(args, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot list variables' });
+      return;
+    }
+    // -stack-list-variables -> Display the names of local variables and function arguments for the 
+    // selected frame. If print-values is 0 or --no-values, print only the names of the variables; if it 
+    // is 1 or --all-values, print also their values; and if it is 2 or --simple-values, print the name, 
+    // type and value for simple data types, and the name and type for arrays, structures and unions. 
+    enqueueCommand("-stack-list-variables", args, callback);
+  };
+  
+  nodeGdb.prototype.callStack = function(args, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot get call stack' });
+      return;
+    }
+    // -stack-list-frames -> List the frames currently on the stack
+    enqueueCommand("-stack-list-frames", args, callback);
+  };
+  
+  nodeGdb.prototype.selectedFrameInfo = function(callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot get info about selected frame' });
+      return;
+    }
+    // -stack-info-frame -> Get info on the selected frame
+    enqueueCommand("-stack-info-frame", [], callback);
+  };
+  
+  nodeGdb.prototype.setSelectedFrame = function(framenum, callback) {
+    // error check
+    if (debugStatus=='idle') {
+      callback({ error: 'Not debugging a program' });
+      return;
+    }
+    if (execStatus=='running') {
+      callback({ error: 'Program is running, cannot get info about selected frame' });
+      return;
+    }
+    // -stack-select-frame -> Change the selected frame. Select a different frame framenum on the stack
+    enqueueCommand("-stack-select-frame", [framenum], callback);
   };
   
   
@@ -754,28 +801,6 @@ function nodeGdb(gdbArgs) {
     me.emit("gdbErr", data);
   });
   
-  
-  //----------------------------------------
-  // private variables
-  //----------------------------------------
-  
-  var interactive = false;                  // when true, more commands can be issued to gdb
-  var gdbInteractiveCallback = undefined;   // function that will be called after GDB has 
-                                            // executed a command and gone back to interactive mode  
-  
-  var debugStatus = 'idle';                 // 'active' or 'idle': do not allow for more than 1 debug at a time
-  
-  var execStatus = 'stopped';               // https://sourceware.org/gdb/onlinedocs/gdb/GDB_002fMI-Async-Records.html#GDB_002fMI-Async-Records
-                                            // execution status can be 'running' or 'stopped' (breakpoint, SIGINT, ...)
-  
-  var commadQueue = [];                     // commands to be executed
-  
-  var streamRecords = new BArray(100);      // save last few records here
-  var execOutRecords = new BArray(100);
-  var notifyOutRecords = new BArray(100);
-  
-  var processes = [];                       // debugee's PID and thread group id
-    
 }
 
 
