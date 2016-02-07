@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html ng-app>
+  <head>
+    <!-- title, meta, stylesheets, favicon, scripts, ... -->
+    <title><%title%></title>
+    
+    <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Ubuntu' type='text/css'>
+    <link rel="stylesheet" href="/jeasyui/themes/default/easyui.css" type="text/css" >
+    <link rel="stylesheet" href="/jeasyui/themes/icon.css" type="text/css" >
+    <link rel='stylesheet' href='/stylesheets/style.css' />
+    
+    <style type="text/css" media="screen">
+      #editor-main { 
+        position:relative;
+        width:100%; height:100%;
+        top:0; right:0; bottom:0; left:0;
+        background-color:"#F00";
+      }
+      .terminal {
+		    font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; font-size: 11px; color: rgb(240, 240, 240);
+		    background: #383734 !important; 
+		    padding: 3px; border: none !important;
+		  }
+    </style>
+    
+    <!-- GUI -->
+    <script type="text/javascript" src="/jquery/dist/jquery.min.js"></script>
+    <script type="text/javascript" src="/jeasyui/jquery.easyui.min.js"></script>
+    <!-- code editor -->
+    <script type="text/javascript" src="/ace-builds/src-min/ace.js" charset="utf-8"></script>
+    <!-- terminal -->
+    <script type="text/javascript" src="/term.js/src/term.js"></script>
+    <!-- socket.io -->
+    <script type="text/javascript" src="/socket.io-client/socket.io.js"></script>
+    
+    <script type="text/javascript" src="/angular/angular.min.js"></script>
+    
+    
+		<script>
+	  
+		//-----------------------------------------
+    // Variables
+    //-----------------------------------------
+    
+    var editor;
+    var socket;
+    var term;
+		
+
+    //-----------------------------------------
+    // Source code file services
+    //-----------------------------------------
+    function getWFile() {
+      $.get("/wfile", function(data, status){
+        editor.setValue(data.wfile, -1);                    // data.wfile holds main.cc's contents 
+        setTimeout(function() { editor.focus(); }, 1500);   // horrible way to get the cursor back to the editor
+      });
+    }
+    function postWFile() {
+      $.post("/wfile", { wfile: editor.getValue() });
+    }
+    
+    //function compileWFile() {
+    //  $.post("/wfile", { wfile: editor.getValue() })
+    //  .done(function( data ) {
+    //    socket.emit('data', 'g++ -o main main.cc\n');
+    //  });
+    //}
+    //function runWFile() {
+    //  socket.emit('data', './main\n');
+    //}
+    
+    
+    function disbleDebugButtons(disabled) {
+      $("#step-in-btn").prop("disabled", disabled);
+      $("#step-over-btn").prop("disabled", disabled);
+      $("#stop-btn").prop("disabled", disabled);
+    }
+    
+    //-----------------------------------------
+    // Debug buttton handlers
+    //-----------------------------------------
+    var debugRunning = false;
+    var debugPaused = true;
+    
+    function debugHandler() {
+      if (debugRunning) {
+        // switch between pause and debug
+        if (debugPaused) {
+          // resume debug
+          // -exec-continue
+          debugPaused = false;
+          $("#debug-btn").html("Pause");
+        } else {
+          debugPaused = true;
+          $("#debug-btn").html("Debug");
+          // send Ctrl+C to kill (which pauses the debugee execution)
+          // nodeGdb.gdbIn.write("\x03");
+        }
+      } else {
+        // start debug session
+        // -file-exec-and-symbols
+        // -exec-args
+        // -exec-run
+        $.get("/debug/run", function(data, status){
+          alert('debug started!');
+        });
+        
+        debugRunning = true;
+        debugPaused = false;
+        disbleDebugButtons(false);
+        $("#debug-btn").html("Pause");
+      }
+    }
+		function stepIntoHandler() {
+		  
+      $.get("/debug/variables", function(data, status){
+        alert(JSON.stringify(data));
+      });
+		}
+		function stepOverHandler() {
+		  
+      $.get("/debug/continue", function(data, status){
+        alert(JSON.stringify(data));
+      });
+		}
+		function runHandler() {
+		  
+		}
+		function stopHandler() {
+		  debugRunning = false;
+      debugPaused = true;
+      disbleDebugButtons(true);
+      $("#debug-btn").html("Debug");
+      // send Ctrl+C to kill (which pauses the debugee execution)
+      // nodeGdb.gdbIn.write("\x03");
+      // -exec-abort
+		}
+		
+	  //-----------------------------------------
+    // Do this when DOM is ready
+    //-----------------------------------------
+    $(function() {
+      
+      // init ace and ask for file contents
+      editor = ace.edit("editor-main");
+      editor.setTheme("ace/theme/monokai");
+      editor.getSession().setMode("ace/mode/c_cpp");
+      getWFile();
+      
+		  // init socket and terminal
+		  socket = io.connect('http://localhost:3000');
+		  socket.on('connect', function() {
+		    term = new Terminal({
+		      cols: 120,
+		      rows: 60,
+		      useStyle: true,
+		      screenKeys: true
+		    });
+		    socket.on('data', function(data) {
+		      term.write(data);
+		    });
+		    socket.on('disconnect', function() {
+          term.destroy();
+        });
+		    term.on('data', function(data) {
+          term.write(data);
+          socket.emit('data', data);
+        });
+        term.open($("#gdb-term")[0]);
+		  });
+		  
+	  });
+		</script>
+
+  </head>
+  <body>
+  
+    <!-- Main layout -->
+    <div class="easyui-layout" data-options="fit:true" >
+    
+    <!-- NORTH REGION: Header -->
+    <div data-options="region:'north',split:false,collapsible:false" style="height:75px;">
+    
+      <div align="center" style="padding:10px"><h1><%title%></h1></div>
+      
+    </div>
+    
+    <!-- SOUTH REGION: Footer -->
+    <div data-options="region:'south',split:false,collapsible:false" style="height:25px;">
+    
+	    <div align="center" style="padding:5px">TFG Albert Lobo</div>
+	    
+    </div>
+    
+    <!-- CENTER REGION: Code files - each file can be edited with its own ace editor -->
+    <div id="content" data-options="region:'center'" style="width:50%;height:100%;">
+    
+      <div class="easyui-tabs" data-options="fit:true">
+        <div title="main.cc">
+          <div id="editor-main"></div>
+        </div>
+      </div>
+      
+    </div>
+    
+    <!-- EAST REGION: Debug components -->
+    <div data-options="region:'east',split:true,collapsible:false" style="width:50%;height:100%;">
+      
+      <div class="easyui-tabs" data-options="fit:true" >
+      
+      <!-- Debugger -->
+      <div title="Debugger">
+      
+      <!-- nested layout for debug components -->
+      <div class="easyui-layout" data-options="fit:true">
+      
+      <!-- NORTH REGION: Debug controls - start debug, step, step into, run, ... -->
+      <div data-options="region:'north',split:false,collapsible:false">
+        <div style="vertical-align:middle">
+        <div style="padding:20px 15px 20px 15px;float:left;display:inline-block">
+          <!-- <button class="easyui-linkbutton" onclick="runHandler()">Run</button> -->
+          <button id="debug-btn" onclick="debugHandler()">Debug</button>
+          <button id="step-in-btn" onclick="stepIntoHandler()" >Step into</button>
+          <button id="step-over-btn" onclick="stepOverHandler()" disabled="disabled">Step over</button>
+          <button id="stop-btn" onclick="stopHandler()" disabled="disabled">Stop</button>
+        </div>
+        <div style="padding:10px 25px 0px 25px;float:left;display:inline-block">
+          <div style="padding-top:5px;width:100px;float:left">
+            <div style="height:25px">gdb args:</div>
+            <div style="height:25px">Program args:</div>
+          </div>
+          <div style="float:left">
+            <div style="height:25px"><input type="text" id="gdb-args" style="width:200px" disabled="disabled"></div>
+            <div style="height:25px"><input type="text" id="program-args" style="width:200px"></div>
+          </div>
+        </div>
+        </div>
+      </div>
+      
+      <!-- SOUTH REGION: GDB terminal -->
+      <div data-options="region:'south',split:true,collapsible:false" style="height:60%">
+        <div class="easyui-tabs" data-options="fit:true" >
+        <!-- Program IO terminal -->
+        <div title="Program IO terminal">
+        <div id="gdb-term">
+        
+        </div>
+        </div>
+        </div>
+      </div>
+      
+      <!-- CENTER REGION: Variables, expressions, call stack, etc -->
+      <div data-options="region:'center'">
+        <div class="easyui-tabs" data-options="fit:true" >
+        
+        <!-- GDB output -->
+        <div title="Output"></div>
+        
+        <!-- Variables tab (should have a datagrid) -->
+        <div title="Variables">
+          <table id="tt" class="easyui-datagrid">
+          <thead>
+            <tr>
+              <th field="var-name" style="width:40%">Name</th>
+              <th field="var-val" style="width:60%">Value</th>
+            </tr>                          
+          </thead>
+          <tbody>
+            <!-- Variable name-value pairs go here, one per row -->
+            <!--
+            <tr>                           
+              <td>x</td>            
+              <td>5</td>            
+            </tr>                          
+            <tr>                           
+              <td>s</td>            
+              <td>"Hola"</td>            
+            </tr>  
+            -->
+          </tbody>
+          </table>  
+
+        </div>
+        
+        <!-- GDB output -->
+        <div title="Expressions">
+          <table id="te" class="easyui-datagrid">
+          <thead>
+            <tr>
+              <th field="var-name" style="width:40%">Expression</th>
+              <th field="var-val" style="width:60%">Value</th>
+            </tr>                          
+          </thead>
+          <tbody>
+            
+          </tbody>
+          </table>
+        </div>
+        
+        
+        </div>
+        </div>
+      </div>
+      
+      </div>
+      </div>
+      
+    </div>
+    </div>
+  </body>
+</html>

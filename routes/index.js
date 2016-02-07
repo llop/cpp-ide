@@ -3,7 +3,7 @@ var router = express.Router();
 
 /* GET home page. */
 router.get('/', function(req, res, next) {
-  res.render('index', { title: 'GDB Debugger' });
+  res.render('index', { title: 'C++ Debugger' });
 });
 
 module.exports = router;

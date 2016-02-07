@@ -1,0 +1,136 @@
+html {
+  width:100%;
+  height:100%;
+}
+
+body {
+  margin:0px;
+  height:100%;
+  font: 14px 'Ubuntu Mono', 'Lucida Grande', Helvetica, Arial, sans-serif;
+}
+
+table {
+  width:100%;
+  height:100%;
+}
+
+tr {
+  width:100%;
+  height:100%;
+}
+td {
+  height:100%;
+}
+
+.full-box {
+  width:100%;
+  height:100%;
+}
+
+.gray-box {
+  background: #CCC;                                           /* For browsers that do not support gradients */
+  background: -webkit-linear-gradient(left top, #AAA, #EEE);  /* For Safari 5.1 to 6.0 */
+  background: -o-linear-gradient(bottom right, #AAA, #EEE);   /* For Opera 11.1 to 12.0 */
+  background: -moz-linear-gradient(bottom right, #AAA, #EEE); /* For Firefox 3.6 to 15 */
+  background: linear-gradient(to bottom right, #AAA, #EEE);   /* Standard syntax */
+  border-top:1px solid #EEE;
+  border-left:1px solid #EEE;
+  border-bottom:1px solid #AAA;
+  border-right:1px solid #AAA;
+}
+
+.code-editor { 
+  position:relative;
+  width:100%; height:100%;
+  top:0; right:0; bottom:0; left:0;
+  background-color:#F00;
+}
+
+.tab-box{
+  padding:0px !important;
+  border:1px solid #AAA !important;
+  position:absolute;
+  top:33px;
+  bottom:1px;
+  left:1px;
+  right:1px;
+} 
+
+.footer-box {
+  font-size:14px;
+  color:#606;
+  display:flex;
+  align-items:center;
+  text-align:center;
+  justify-content:center;
+  position:absolute;
+  bottom:0px;
+  height:30px;
+}
+.ui-widget {
+  font: 14px 'Ubuntu Mono', 'Lucida Grande', Helvetica, Arial, sans-serif;
+}
+
+.ui-tabs-anchor {
+  padding:4px 12px 4px 12px !important;
+}
+
+.ui-tabs {
+  padding:1px !important;
+}
+.ui-tabs-nav li {
+  padding:0px !important;
+  margin:0px !important;
+}
+
+.ui-tabs-panel {
+  padding:0px !important;
+}
+
+.list-group-item {
+  padding:0px;
+}
+
+
+table.testgrid { 
+  border-collapse:collapse; 
+  border:1px solid #CCB; 
+  width:100%;
+  height:100%;
+}
+table.testgrid td, table.testgrid th { 
+  padding:5px; 
+  border:1px solid #E0E0E0;
+}
+table.testgrid th { 
+  background:#E5E5E5;
+  text-align:left;
+}
+input.invalid { 
+  background:red; 
+  color:#FDFDFD; 
+}
+
+
+.panel-body {
+  padding:0px !important;
+}
+
+.panel {
+  margin:0px !important;
+}
+.list-group {
+  margin:0px !important;
+}
+.jumbotron {
+  color:#FFF;
+  background-color:#333;
+  padding:0px !important;
+  margin:0px !important;
+}
+
+.list-group {
+  height:100%;
+}
+
+

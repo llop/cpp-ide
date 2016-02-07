@@ -2,8 +2,9 @@
 
 
 
-Pretty print
-------------
+Getting gdb to pretty print
+System setup for Ubuntu 14.04
+-----------------------------
 
 * to install python 2.7, apt-get these packages:
 
@@ -18,7 +19,7 @@ Pretty print
 
 * install using the following commands:
 
-  sudo ./configure --enable-unicode=ucs4 --enable-shared
+  sudo ./configure --enable-unicode=ucs4 --enable-shared    # these options are necessary for gdb to compile properly
   sudo make install
   sudo checkinstall
 
@@ -32,9 +33,26 @@ Pretty print
 * install using the following commands:
   ./configure --with-python
   make
-  sudo cp gdb/gdb /usr/local/bin/gdb
+  sudo cp gdb/gdb /usr/local/bin/gdb                    # use the gdb we just built with python
+  sudo cp -r gdb/data-directory /usr/local/share/gdb    # copy data-dir to default location so start .gdbinit succeeds
 
 
+* to make gdb actually do the pretty printing, 
+  check-out the latest Python libstdc++ printers to a place on your machine. 
+  In a local directory, do:
+
+  svn co svn://gcc.gnu.org/svn/gcc/trunk/libstdc++-v3/python:
+
+* Add the following to your ~/.gdbinit. 
+  The path needs to match where the python module above was checked-out.
+
+  python 
+  import sys
+  sys.path.append("/usr/share/gcc-4.8/python");
+  sys.path.insert(0, '/home/llop/gdb_printers/python')
+  from libstdcxx.v6.printers import register_libstdcxx_printers
+  register_libstdcxx_printers (None)
+  end
 
 
 

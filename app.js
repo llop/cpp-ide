@@ -43,13 +43,12 @@ app.use(express.static(path.join(__dirname, 'bower_components')));
 var socket;
 var buff = [];
 
-var nodegdb = require("./node-gdb/node-gdb.js");
-
-var gdbArgs = ["-data-directory", "/home/llop/Llop/gdb-7.10.1/gdb/data-directory"];
+var nodegdb = require("gdb-mi");
+var gdbArgs = []; //["-data-directory", "/home/llop/Llop/gdb-7.10.1/gdb/data-directory"];
 var gdb = new nodegdb(gdbArgs);
 gdb.ready(function() {
   app.gdb = gdb;
-
+  
   // Listen to all events
   gdb.on('gdbConsoleOut', function(data) {
     console.log("gdbConsoleOut: " + JSON.stringify(data));
@@ -98,10 +97,9 @@ gdb.ready(function() {
   var jocDeProves = fs.createReadStream('/home/llop/Llop/FIB/TFG/in.txt');
   
   gdb.load("/home/llop/Llop/FIB/TFG/a.out", [], function(data) {
-    gdb.run([], function(data) {
+    gdb.run([], function(data) {   // --start: break at main
       gdb.pipeToAppIn(jocDeProves);
     });
-  
     gdb.evalExpression("v", function(data) {
       console.log("EXPR = "+JSON.stringify(data));
     });
