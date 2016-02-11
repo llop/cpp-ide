@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html ng-app>
+<html ng-app="cppApp">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -28,7 +28,7 @@
   </head>
   <body>
     
-    <div class="ui-layout-west">
+    <div class="ui-layout-west" ng-controller="GdbController as gdb">
       <ul>
         <li><a href="#project-tab">Projects</a></li>
       </ul>
@@ -56,11 +56,7 @@
       <div class="ui-layout-content ui-widget-content">
         <div id="debug-tab" style="height:100%">
 
-          <div style="height:50px"></div>
           <div id="debug-layout" style="height:100%">
-            
-            
-            
             <div class="ui-layout-north">
               <div style="padding:5px">
               <div class="btn-toolbar" role="toolbar">
@@ -99,7 +95,7 @@
               </ul>
               <div class="ui-layout-content ui-widget-content">
                 <div id="debug-vars-tab">
-                  <div id="tablecontent"></div>
+                  <div id="tablecontent" gdb-variables="{{gdbVariables}}"></div>
                 </div>
                 <div id="debug-expr-tab">
 
@@ -118,8 +114,8 @@
                 <li><a href="#debug-term-tab">Program IO</a></li>
               </ul>
               <div class="ui-layout-content ui-widget-content">
-                <div id="debug-term-tab">
-
+                <div id="debug-term-tab" class="term" style="width:100%;height:100%">
+                  <div id="term" style="width:100%;height:100%;overflow:auto" gdb-term=""></div>
                 </div>
               </div> 
             </div>
@@ -150,14 +146,19 @@
     </div>
     
     
-    <!-- JS imports here -->
+    
+    <!-- JQuery -->
     <script src="/jquery/dist/jquery.min.js"></script>
     <script src="/jquery-ui/jquery-ui.min.js"></script>
+    
+    
+    
     <script src="/jquery-layout/jquery.layout-1.4.4.js"></script>
-    <script src="/angular/angular.min.js"></script>
     <script src="/bootstrap/dist/js/bootstrap.min.js"></script>
     <script src="/jstree/dist/jstree.min.js"></script>
     <script src="/ace-builds/src-min/ace.js"></script>
+    <script src="/term.js/src/term.js"></script>
+    
     <!-- editablegrid imports -->
     <script src="/editablegrid/editablegrid.js"></script>
 		<script src="/editablegrid/editablegrid_renderers.js" ></script>
@@ -167,7 +168,8 @@
 		<script src="/editablegrid/editablegrid_charts.js" ></script>
 		
     <script>
-      var editor,
+      var socket,
+          editor,
           editableGrid;
   
       $(function() {
@@ -199,36 +201,123 @@
         // jstree for file system
         $("#file-tree").jstree();
          
-        // editablegrid data
-				var metadata = [];
-				metadata.push({ name: "name", label: "Name", datatype: "string", editable: false});
-				metadata.push({ name: "type", label: "Type", datatype: "string", editable: false});
-				metadata.push({ name: "value", label:"Value", datatype: "string", editable: true});
-				var data = [];
-				data.push({id: 1, values: ["x","int","10"]});
-        data.push({id: 2, values: ["s","string","eo"]});
-				// editablegrid init
-				editableGrid = new EditableGrid("DemoGridJsData");
-				editableGrid.load({"metadata": metadata, "data": data});
-				editableGrid.renderGrid("tablecontent", "testgrid");
+        
       });
+      
+      
+      //-----------------------------------------
+      // Angular
+      //-----------------------------------------
+      //var gdbApp = angular.module('gdbApp', []);
+      //gdbApp.controller('GdbController', ['$scope', function($scope) {
+      //  $scope.gdbState = {
+      //    debugStatus: 'idle',
+      //    execStatus: 'stopped',
+      //    interactive: false
+      //  };
+      //}]);
       
       //-----------------------------------------
       // Source code file services
       //-----------------------------------------
       function getWFile() {
         $.get("/wfile", function(data, status){
-          editor.setValue(data.wfile, -1);                    // data.wfile holds main.cc's contents 
-          setTimeout(function() { editor.focus(); }, 1500);   // horrible way to get the cursor back to the editor
+          editor.setValue(data.wfile, -1);  // data.wfile holds main.cc's contents
         });
       }
       function postWFile() {
         $.post("/wfile", { wfile: editor.getValue() });
       }
-
     </script>
     <script src="/js/layout.js"></script>
     
+    
+    <!-- Angular and sockets -->
+    <script src="/socket.io-client/socket.io.js"></script>
+    <script src="/angular/angular.js"></script>
+    <script src="/angular-socket-io/socket.js"></script>
+    <script>
+      var cppApp = angular.module('cppApp', ['btford.socket-io']);
+      cppApp.factory('socket', function (socketFactory) { return socketFactory(); });
+      cppApp.controller('GdbController', ['$scope', 'socket', function($scope, socket) {
+        $scope.gdbState = {
+          debugStatus: 'idle',
+          execStatus: 'stopped',
+          interactive: false
+        };
+        $scope.gdbVariables = [
+          {name:"x", type:"int", value:"5"},
+          {name:"s", type:"string", value:"Hola"}
+        ];
+        // socket setup
+        socket.on('gdb-var-list', function(data) {
+          
+        });
+        socket.on('gdb-frame-list', function(data) {
+          
+        });
+        socket.on('gdb-state', function(data) {
+          
+        });
+      }]);
+      cppApp.directive('gdbTerm', ['socket', function(socket) {
+          return {
+            restrict: 'A',
+            link: function(scope, element, attrs) {
+              var term = new Terminal({
+                cols: 80,
+                rows: 24,
+                screenKeys: true
+              });
+              term.on('data', function(data) {
+                socket.emit('gdb-app-in', data);
+              });
+              term.open(element[0]);
+              //term.write('\x1b[31mWelcome to term.js!\x1b[m\r\n');
+              socket.on('appOut', function(data) {
+                term.write(data);
+              });
+              socket.on('disconnect', function() {
+                term.destroy();
+              });
+              
+            }
+          };
+      }]);
+      cppApp.directive('gdbVariables', ['socket', function(socket) {
+        return {
+          restrict: 'A',
+          link: function(scope, element, attrs) {
+            
+            // editablegrid data
+            var metadata = [];
+            metadata.push({ name: "name", label: "Name", datatype: "string", editable: false});
+            metadata.push({ name: "type", label: "Type", datatype: "string", editable: false});
+            metadata.push({ name: "value", label:"Value", datatype: "string", editable: true});
+            var data = [];
+            data.push({id: 1, values: ["x","int","10"]});
+            data.push({id: 2, values: ["s","string","eo"]});
+            // editablegrid init
+            editableGrid = new EditableGrid("DemoGridJSData", {
+              // called when some value has been modified: we display a message
+              modelChanged: function(rowIdx, colIdx, oldValue, newValue, row) { 
+                //_$("message").innerHTML = "<p class='ok'>New value is '" + newValue + "'</p>";
+                socket.emit('gdb-set-var-value', colIdx, oldValue, newValue);
+                alert("MODEL CHANGE: "+colIdx+', '+oldValue+', '+newValue);
+              }
+            });
+            editableGrid.load({"metadata": metadata});
+            editableGrid.renderGrid("tablecontent", "testgrid");
+
+            
+            scope.$watch(attrs.gdbVariables, function(newValue, oldValue) {
+              editableGrid.load({"data": data});
+              editableGrid.renderGrid("tablecontent", "testgrid");
+            });
+          }
+        };
+      }]);
+    </script>
     
   </body>
 </html>

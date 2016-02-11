@@ -106,6 +106,43 @@ input.invalid {
 }
 
 
-
-
-
+/* The console container element */
+#term {
+}
+/* The inner console element. */
+.jqconsole {font-family: "Ubuntu Mono", "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 14px;
+  color: rgb(240, 240, 240);
+  background: #383734; 
+  padding: 10px;
+}
+/* The cursor. */
+.jqconsole-cursor {
+    background-color: gray;
+}
+/* The cursor color when the console looses focus. */
+.jqconsole-blurred .jqconsole-cursor {
+    background-color: #666;
+}
+/* The current prompt text color */
+.jqconsole-prompt {
+    color: #0d0;
+}
+/* The command history */
+.jqconsole-old-prompt {
+    color: #0b0;
+    font-weight: normal;
+}
+/* The text color when in input mode. */
+.jqconsole-input {
+    color: #dd0;
+}
+/* Previously entered input. */
+.jqconsole-old-input {
+    color: #bb0;
+    font-weight: normal;
+}
+/* The text color of the output. */
+.jqconsole-output {
+    color: white;
+}
