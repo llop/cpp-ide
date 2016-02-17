@@ -44,7 +44,13 @@ app.use(express.static(path.join(__dirname, 'bower_components')));
 
 var socketio = require('socket.io');
 var io = socketio();
-require('./controllers/cpp-socket')(app, io);
+app.io = io;
+
+
+//require('./controllers/cpp-socket')(app, io);
+require('./controllers/workspace-controller')(io);
+require('./controllers/cpp-controller')(io);
+require('./controllers/haskell-controller')(io);
 
 
 //----------------------------------------------

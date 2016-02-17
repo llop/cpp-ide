@@ -22,9 +22,10 @@
     "ace-builds": "^1.2.3",
     "socket.io-client": "^1.4.5",
     "angular": "^1.5.0",
-    "bootstrap": "^3.3.6",
+    "angular-bootstrap": "^1.1.2",
     "jstree": "^3.2.1",
     "jq-console": "^2.13.2",
-    "term.js": "^0.0.7"
+    "term.js": "^0.0.7",
+    "bootstrap": "^3.3.6"
   }
 }

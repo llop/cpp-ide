@@ -1,6 +1,6 @@
 {
-  "name": "gdb-term",
-  "version": "0.0.0",
+  "name": "webIDE",
+  "version": "0.2.5",
   "private": true,
   "scripts": {
     "start": "node ./bin/www"
@@ -14,6 +14,7 @@
     "morgan": "^1.6.1",
     "serve-favicon": "^2.3.0",
     "socket.io": "^1.4.4",
-    "gdb-mi":"^1.0.0"
+    "gdb-mi":"^1.1.0",
+    "chokidar":"1.4.2"
   }
 }
